@@ -1,0 +1,74 @@
+---
+title: "Data Visualizations"
+author: "Ananya Sista"
+date: "2026-04-19"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+data <- read.csv("all_tmbd_movie_info.csv")
+
+library(ggplot2)
+library(dplyr)
+```
+
+
+# Box plots
+
+## winners vs. non-winners for revenue 
+```{r}
+ggplot(data, aes(x=factor(Winner, labels=c("Non-Winner", "Winner")), y=log(Revenue))) + geom_boxplot() + labs(title="Movie Revenue by Winner Status", y="log(Revenue)", x="")
+```
+
+The box plots above tell us that winners have a higher median log(revenue) than non-winners, and that the entire distribution for winners is slightly shifted upwards. On the other hand, non-winners show a wider spread of lower revenue values There is substation overlap between the distributions, which means that revenue alone is not a perfect predictor of Oscar winning success. Outliers do exist in both groups, suggesting some films perform very differently from the norm; however, these outliers are lower for non-winners than winners. Overall, winning films tend to earn more revenue on average, but revenue alone does not clearly separate winners from non-winners. 
+
+## Winners vs. non-winners for ROI (revenue/budget)
+
+```{r}
+ggplot(data, aes(x=factor(Winner, labels=c("Non-Winner", "Winner")), y=log(Revenue/Budget))) + geom_boxplot() + labs(title="ROI by Winner Status", y="log(Revenue/Budget)", x="")
+```
+
+From the plots above, winners have a higher median ROI than non-winners: this suggests winners are generally more efficient at converting budget into revenue. Non-winners show more extreme low ROI outliers, including films tat under perform relative to budget. The gap between groups is more visible than when plotting raw Revenue, but some overlap in the distributions still exists which means that ROI is a more helpful predictor than raw revenue or budget along, but is still not deterministic.
+
+# Density Plots
+
+## Runtime by winning status
+```{r}
+ggplot(data, aes(x=Runtime, fill=factor(Winner, labels=c("Non-Winner", "Winner")))) + geom_density() + labs(title="Runtime Distribution: Winners vs. Non-Winners", x="Runtime (minutes)", fill=NULL) + scale_fill_manual(values=c("navy", "gold"))
+```
+
+Both winners and non-winners have similar overall distribution shapes, with the peak runtime for both groups around ~120-140 minutes. Winners appear to have a slightly wider distribution, with more representation in longer runtimes. This is also seen by the slight right-shift in the winners density plot, which suggests that winning movies may be marginally longer on average. Due to heavy overlap between the plots, runtime does not strongly distinguish winners on its own.
+
+# Histogram
+
+## Vote Average for Winners vs. Non-Winners
+```{r}
+ggplot(data, aes(x = Vote_average_list)) +
+  geom_histogram(binwidth = 0.5, fill = "steelblue", color = "black") +
+  facet_wrap(~ factor(Winner, labels = c("Non-Winner", "Winner"))) +
+  labs(title = "Vote Average Distribution by Outcome",
+       x = "Vote Average",
+       y = "Count")
+```
+
+Both winners and non-winners show similar overall shapes in vote average distribution, with both plots exhibiting a slightly left-skewed distribution. This suggests that there are more films with higher average ratings. The winner distribution has noticeably fewer observations per bin, which is expected since there is only one winning film per year. There is substantial overalp between the two distributions, indicating vote average along is not a strong separator of winners vs. non-winners. Therefore, while vote averages show a mild positive association with winning, the overlap suggests critics' ratings along are not sufficient to predict Best Picture outcomes. 
+
+# Scatter Plot
+
+## Budget vs. Revenue, colored by winner status
+```{r}
+ggplot(data, aes(x=log(Budget), y=log(Revenue), color=factor(Winner, labels=c("Non-Winner", "Winner")))) + geom_point(alpha=0.6) + geom_smooth(method="lm", se=FALSE) + theme_minimal() + labs(title = "Revenue vs Budget with Regression Lines",
+       x = "log(Budget)",
+       y = "log(Revenue)",
+       color = NULL) + scale_color_manual(values=c("navy", "gold")) + scale_x_log10() +
+  scale_y_log10()
+```
+
+Across nearly all budget levels, winners tend to have higher revenue than non-winners, suggesting a consistent separation between groups. The relationship between budget and revenue is positive for both groups, but winners appear to have a steeper or more favorable revenue response to budget. This implies that for a given level of investment, winning films are generally more commercially successful. There is still some overlap between groups, meaning budget alone does not guarantee winning status, but the scatterplot does suggest that commercial success is associated with award outcomes.
+
+Overall, while no single variable clearly separates winners from non-winners, financial performance and critical reception jointly suggest that Best Picture winners tend to have both better ROI and commercial success.
+
