@@ -105,7 +105,15 @@ predict1.1Best <- predict(bestFit, type="response")
 oscars.1Best <- ifelse(predict1.1Best >= 0.5,1,0)
 table(cleaned_best_noms$winner, oscars.1Best)
 
+# Confusion Table
+# Left to Right
+# True Negative: Movie did not win, model correctly predicted no win.
+# False Positive: Movie lost, but model predicted winner.
+# False Negative: Movie actually won, but model predicted loser.
+# True Positive: Movie won, model correctly predicted winner.
 
+
+# Ignore BAD FORMAT
 # Manually
 # ALL logistic regression
 model_all <- glm(winner ~ log_revenue + log_budget + runtime + vote_average_list + vote_count + popularity + imdb_rating + rotten_tomato_score + ROI, data = cleaned_best_noms, family = binomial)
@@ -119,11 +127,6 @@ cleaned_best_noms$pred_class <- ifelse(cleaned_best_noms$pred_prob > 0.5, 1, 0)
 
 # Confusion Table
 table(Actual = cleaned_best_noms$winner, Predicted = cleaned_best_noms$pred_class)
-# Left to Right
-# True Negative: Movie did not win, model correctly predicted no win.
-# False Positive: Movie lost, but model predicted winner.
-# False Negative: Movie actually won, but model predicted loser.
-# True Positive: Movie won, model correctly predicted winner.
 
 # Odds Ratio
 exp(coef(model_all))

@@ -1,0 +1,426 @@
+---
+title: "regression_code"
+author: "Elle Strauss, Ananya Sista"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+# Package Installations
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(MASS)      # LDA + stepAIC
+library(rpart)     # decision trees
+library(caret)     # evaluation metrics
+library(pROC)      # ROC / AUC
+library(ggplot2)
+library(rpart.plot)
+```
+
+# Cleaning Data
+```{r}
+# read in csv (make sure working directory is the repo)
+oscar_noms <- read_csv('all_tmbd_movie_info.csv')
+colnames(oscar_noms) <- c('year', 'ceremony', 'award', 'winner', 'film_name', 'film_producers', 'revenue', 'budget', 'runtime', 'vote_average_list', 'vote_count', 'popularity', 'genre', 'imdb_rating', 'rotten_tomato_score', 'mppa_rating', 'directors')
+
+# cleaning data (removing any movies that didn't have a budget or revenue)
+# ended up removing 20 observations
+oscars_bp <- oscar_noms %>% filter(revenue > 0 & budget > 0)
+# do log of revenue and budget (highly skewed to the right), not linear
+oscars_bp$log_revenue <- log(oscars_bp$revenue)
+oscars_bp$log_budget <- log(oscars_bp$budget)
+oscars_bp$ROI <- oscars_bp$revenue / oscars_bp$budget
+
+summary(oscars_bp)
+
+# confirm winner is a numeric
+oscars_bp$winner <- factor(oscars_bp$winner)
+```
+
+## Separating Out Critic, Audience, and Market Variables
+```{r}
+critics_vars <- c("rotten_tomato_score")
+
+audience_vars <- c("imdb_rating", "vote_average_list", "vote_count")
+
+market_vars <- c("log_revenue", "log_budget", "popularity", "ROI")
+```
+
+# Logistic Regression
+## Individual Predictors
+```{r}
+AIC1.1 <- matrix(rep(0,9), ncol=1)
+rownames(AIC1.1) <- c("log_revenue", "log_budget", "runtime", "vote_average_list", "vote_count", "popularity", "imdb_rating", "rotten_tomato_score", "ROI")
+
+mod1.1a <- glm(winner ~ log_revenue, family=binomial, data=oscars_bp)
+summary(mod1.1a)
+AIC1.1[1] <- AIC(mod1.1a)
+predict1.1a <- predict(mod1.1a, type="response")
+oscars1.1a <- ifelse(predict1.1a >= 0.5,1,0)
+table(oscars_bp$winner, oscars1.1a)
+
+mod1.1b <- glm(winner ~ log_budget, family=binomial, data=oscars_bp)
+summary(mod1.1b)
+AIC1.1[2] <- AIC(mod1.1b)
+predict1.1b <- predict(mod1.1b, type="response")
+oscars1.1b <- ifelse(predict1.1b >= 0.5,1,0)
+table(oscars_bp$winner, oscars1.1b)
+
+mod1.1c <- glm(winner ~ runtime, family=binomial, data=oscars_bp)
+summary(mod1.1c)
+AIC1.1[3] <- AIC(mod1.1c)
+predict1.1c <- predict(mod1.1c, type="response")
+oscars1.1c <- ifelse(predict1.1c >= 0.5,1,0)
+table(oscars_bp$winner, oscars1.1c)
+
+mod1.1d <- glm(winner ~ vote_average_list, family=binomial, data=oscars_bp)
+summary(mod1.1d)
+AIC1.1[4] <- AIC(mod1.1d)
+predict1.1d <- predict(mod1.1d, type="response")
+oscars1.1d <- ifelse(predict1.1d >= 0.5,1,0)
+table(oscars_bp$winner, oscars1.1d)
+
+mod1.1e <- glm(winner ~ vote_count, family=binomial, data=oscars_bp)
+summary(mod1.1e)
+AIC1.1[5] <- AIC(mod1.1e)
+predict1.1e <- predict(mod1.1e, type="response")
+oscars1.1e <- ifelse(predict1.1e >= 0.5,1,0)
+table(oscars_bp$winner, oscars1.1e)
+
+mod1.1f <- glm(winner ~ popularity, family=binomial, data=oscars_bp)
+summary(mod1.1f)
+AIC1.1[6] <- AIC(mod1.1f)
+predict1.1f <- predict(mod1.1f, type="response")
+oscars1.1f <- ifelse(predict1.1f >= 0.5,1,0)
+table(oscars_bp$winner, oscars1.1f)
+
+mod1.1g <- glm(winner ~ imdb_rating, family=binomial, data=oscars_bp)
+summary(mod1.1g)
+AIC1.1[7] <- AIC(mod1.1g)
+predict1.1g <- predict(mod1.1g, type="response")
+oscars1.1g <- ifelse(predict1.1g >= 0.5,1,0)
+table(oscars_bp$winner, oscars1.1g)
+
+mod1.1h <- glm(winner ~ rotten_tomato_score, family=binomial, data=oscars_bp)
+summary(mod1.1h)
+AIC1.1[8] <- AIC(mod1.1h)
+predict1.1h <- predict(mod1.1h, type="response")
+oscars1.1h <- ifelse(predict1.1h >= 0.5,1,0)
+table(oscars_bp$winner, oscars1.1h)
+
+
+mod1.1i <- glm(winner ~ ROI, family=binomial, data=oscars_bp)
+summary(mod1.1i)
+AIC1.1[9] <- AIC(mod1.1i)
+predict1.1i <- predict(mod1.1i, type="response")
+oscars1.1i <- ifelse(predict1.1i >= 0.5,1,0)
+table(oscars_bp$winner, oscars1.1i)
+
+AIC1.1
+```
+
+### Plots
+```{r}
+aic_df <- data.frame(
+  predictor = rownames(AIC1.1),
+  AIC = AIC1.1[,1]
+)
+
+plot(
+  aic_df$AIC,
+  type = "b",
+  xaxt = "n",
+  xlab = "Predictor",
+  ylab = "AIC",
+  main = "AIC by Single-Predictor Logistic Models"
+)
+
+axis(1, at = 1:nrow(aic_df), labels = aic_df$predictor, las = 2)
+
+ggplot(aic_df, aes(x = reorder(predictor, AIC), y = AIC)) +
+  geom_point(size = 3) +
+  geom_line(group = 1) +
+  labs(
+    title = "AIC by Single-Predictor Logistic Models",
+    x = "Predictor",
+    y = "AIC"
+  )
+```
+
+## Comparing Models (All Predictors)
+```{r}
+mod.full <- glm(winner ~ log_revenue + log_budget + runtime + vote_average_list + vote_count + popularity + imdb_rating + rotten_tomato_score + ROI, family=binomial, data=oscars_bp)
+mod.null <- glm(winner ~ 1, family=binomial, data=oscars_bp) # intercept only model
+
+stepAIC(mod.full, direction="backward")
+# best backward model: log_revenue + log_budget + runtime + vote_average_list + popularity
+stepAIC(mod.null, direction="forward", scope=list(upper=mod.full, lower=mod.null))
+# best forward model: imdb_rating + ROI + runtime + log_budget + log_revenue
+```
+
+## Predicting Based on Best Fit
+### Adding Test and Train Data
+```{r}
+set.seed(123)
+
+train_idx <- sample(1:nrow(oscars_bp), 0.7 * nrow(oscars_bp))
+
+train <- oscars_bp[train_idx, ]
+test  <- oscars_bp[-train_idx, ]
+```
+
+
+```{r}
+# Try out the best fit on predicting (use backwards)
+bestFitBack <- glm(winner ~ log_revenue + log_budget + runtime + vote_average_list + popularity, family=binomial, data=train)
+pred_prob_back <- predict(bestFitBack, newdata = test, type = "response")
+pred_back <- ifelse(pred_prob_back >= 0.5, 1, 0)
+
+table(Actual = test$winner, Predicted = pred_back)
+
+# oscars_bp$predict_BestBack <- predict(bestFitBack, type="response")
+# oscars.1BestBack <- oscars_bp %>% group_by(year) %>% mutate(predicted = 0, predicted = replace(predicted, which.max(predict_BestBack), 1)) %>% ungroup()
+# table(oscars.1BestBack$winner, oscars.1BestBack$predicted)
+
+bestFitFor <- glm(winner ~ imdb_rating + ROI + runtime + log_budget + log_revenue, family=binomial, data=train)
+pred_prob_for <- predict(bestFitFor, newdata = test, type = "response")
+pred_for <- ifelse(pred_prob_for >= 0.5, 1, 0)
+
+table(Actual = test$winner, Predicted = pred_for)
+# oscars_bp$predict_BestFor <- predict(bestFitFor, type="response")
+# oscars.1BestFor <- oscars_bp %>% group_by(year) %>% mutate(predicted = 0, predicted = replace(predicted, which.max(predict_BestFor), 1)) %>% ungroup()
+# table(oscars.1BestBack$winner, oscars.1BestFor$predicted)
+```
+## Model Comparisons
+```{r}
+# Critics only model
+model_critics <- glm(
+  winner ~ rotten_tomato_score,
+  family = binomial,
+  data = train
+)
+
+# Audience only model
+model_audience <- glm(
+  winner ~ imdb_rating + vote_average_list + vote_count,
+  family = binomial,
+  data = train
+)
+
+# Combined model (critics + audience)
+model_crit_aud <- glm(
+  winner ~ rotten_tomato_score +
+    imdb_rating + vote_average_list + vote_count,
+  family = binomial,
+  data = train
+)
+
+# Market model (bugdet, popularity, revenue)
+model_market <- glm(winner ~ log_revenue + log_budget + popularity,
+                    family = binomial, data = train)
+
+# Full model (controls included)
+model_full <- glm(
+  winner ~ rotten_tomato_score +
+    imdb_rating + vote_average_list + vote_count +
+    log_revenue + log_budget + runtime + popularity,
+  family = binomial,
+  data = train
+)
+
+
+
+AIC(model_critics, model_audience, model_crit_aud, model_market, model_full)
+
+# predicted probabilities
+p_critics <- predict(model_critics, newdata = test, type = "response")
+p_audience <- predict(model_audience, newdata = test, type = "response")
+p_crit_aud <- predict(model_crit_aud, newdata = test, type = "response")
+p_market <- predict(model_market, newdata = test, type = "response")
+p_full <- predict(model_full, newdata = test, type = "response")
+
+# ROC curves
+roc_critics <- roc(test$winner, p_critics)
+roc_audience <- roc(test$winner, p_audience)
+roc_crit_aud <- roc(test$winner, p_crit_aud)
+roc_market <- roc(test$winner, p_market)
+roc_full <- roc(test$winner, p_full)
+
+plot(roc_critics, col="red3")
+lines(roc_audience, col="gold")
+lines(roc_crit_aud, col="blue3")
+lines(roc_market, col="lightgreen")
+lines(roc_full, col="magenta")
+
+
+legend("bottomright",
+       legend=c("Critics", "Audience", "Combined", "Market", "Full"),
+       col=c("red3","gold","blue3", "lightgreen", "magenta"),
+       lwd=2)
+
+# AUC values
+auc(roc_critics)
+auc(roc_audience)
+auc(roc_crit_aud)
+auc(roc_market)
+auc(roc_full)
+
+auc_df <- data.frame(
+  model = c("Critics","Audience","Combined","Market","Full"),
+  auc = c(auc(roc_critics),
+          auc(roc_audience),
+          auc(roc_crit_aud),
+          auc(roc_market),
+          auc(roc_full))
+)
+
+barplot(auc_df$auc, names.arg = auc_df$model, main="Model Comparison", ylim=c(0, 1), col="lightblue", xlab="Models", ylab="AUC")
+```
+
+### Statistical Test of Models
+```{r}
+anova(model_audience, model_crit_aud, test = "Chisq")
+anova(model_critics, model_crit_aud, test = "Chisq")
+anova(model_market, model_full, test = "Chisq")
+anova(model_crit_aud, model_full, test = "Chisq")
+
+# Predictions
+pred_critics <- ifelse(p_critics >= 0.5, 1, 0)
+pred_audience <- ifelse(p_audience >= 0.5, 1, 0)
+pred_crit_aud <- ifelse(p_crit_aud >= 0.5, 1, 0)
+pred_market <- ifelse(p_market >= 0.5, 1, 0)
+
+# Confusion matrices
+table(test$winner, pred_critics)
+table(test$winner, pred_audience)
+table(test$winner, pred_crit_aud)
+table(test$winner, pred_market)
+
+summary(model_crit_aud)
+
+exp(cbind(Odds_Ratio = coef(model_crit_aud),
+          confint(model_crit_aud)))
+```
+
+
+
+### Confusion Table
+Left to Right  
+True Negative: Movie did not win, model correctly predicted no win.  
+False Positive: Movie lost, but model predicted winner.  
+False Negative: Movie actually won, but model predicted loser.  
+True Positive: Movie won, model correctly predicted winner.
+
+### Comparing Step Models
+```{r}
+roc_back <- roc(test$winner, pred_prob_back)
+roc_for  <- roc(test$winner, pred_prob_for)
+
+plot(roc_back, col="blue", main="ROC Comparison of Logistic Models")
+lines(roc_for, col="red")
+
+legend("bottomright",
+       legend=c("Backward Model", "Forward Model"),
+       col=c("blue", "red"),
+       lwd=2)
+
+# Coefficients Odds Ratio
+# visualizes the estimated effects of predictor variables on a categorical outcome by displaying their log-odds or odds ratios.
+coef_df <- data.frame(
+  variable = names(coef(bestFitBack)),
+  value = coef(bestFitBack)
+)
+
+ggplot(coef_df[-1,], aes(x = reorder(variable, value), y = value)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(
+    title = "Logistic Regression Coefficients",
+    x = "Predictor",
+    y = "Effect on Log-Odds"
+  )
+```
+
+### Probability Of Separation
+```{r}
+ggplot(test, aes(x = pred_prob_back, fill = winner)) +
+  geom_density(alpha = 0.5) +
+  labs(
+    title = "Separation of Predicted Probabilities",
+    x = "Predicted Probability of Winning"
+  )
+```
+Does the model actually separate winners from losers? 
+If curves overlap → weak model  
+If separated → strong model  
+
+# Classification Tree
+```{r}
+# Classification Tree
+tree_model <- rpart(winner ~ log_revenue + log_budget + imdb_rating + popularity + vote_count + runtime, data=oscars_bp, method="class")
+tree_pred <- predict(tree_model, newdata = test, type="class")
+table(Actual=test$winner, Predicted=tree_pred)
+print(tree_model)
+
+# Classification Tree Plot
+rpart.plot(tree_model,
+           type = 2,
+           extra = 104,
+           main = "Classification Tree for Oscar Prediction")
+
+# Variable Importance
+barplot(tree_model$variable.importance,
+        main = "Variable Importance (Decision Tree)",
+        las = 2, ylim=c(0, 12), col="lightblue", ylab="Variable Importance", xlab="Variable")
+
+
+```
+
+
+# LDA
+```{r}
+model <- lda(winner ~ log_revenue + log_budget + imdb_rating + popularity, data=train)
+
+lda_pred <- predict(model, newdata=test)$class
+
+table(Actual=test$winner, Predicted=lda_pred)
+```
+# General Analysis
+```{r}
+# Means
+mean(pred_back == test$winner)
+mean(lda_pred == test$winner)
+mean(tree_pred == test$winner)
+
+# Confusion Matrix
+confusionMatrix(as.factor(pred_back), test$winner)
+confusionMatrix(as.factor(lda_pred), test$winner)
+confusionMatrix(as.factor(tree_pred), test$winner)
+
+# ROC/AUC
+# A probability curve that plots the True Positive Rate (Sensitivity)
+roc_obj <- roc(test$winner, pred_prob_back)
+
+
+
+plot(roc_obj, col="blue3")
+lines(roc_lda, col="lightgreen")
+lines(roc_tree, col="magenta")
+
+
+legend("bottomright",
+       legend=c("Backwards","LDA","Classification Tree"),
+       col=c("blue3", "lightgreen", "magenta"),
+       lwd=2)
+
+# AUC values
+auc_df <- data.frame(
+  model = c("Backwards","LDA","Classification Tree"),
+  auc = c(auc(roc_obj),
+          auc(roc_lda),
+          auc(roc_tree))
+)
+
+barplot(auc_df$auc, names.arg = auc_df$model, main="Model Comparison", ylim=c(0, 1), col="lightblue", xlab="Models", ylab="AUC")
+```
+
